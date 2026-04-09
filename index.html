@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title> Pitch – Trainer V2 </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  <style>
+    :root {
+      --primary: #00d4ff; --bg: #0f172a; --card: #1e293b; --text: #f1f5f9;
+      --accent: #ef4444; --success: #22c55e; --input-bg: #334155;
+    }
+
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 15px; margin: 0; min-height: 100vh; }
+    .container { max-width: 480px; background: var(--card); border-radius: 24px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.4); width: 100%; }
+
+    .app-header { text-align: center; margin-bottom: 10px; }
+    .app-title { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0; }
+    .app-subtitle { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; }
+
+    #oscilloscope { width: 100%; height: 90px; background: rgba(0,0,0,0.4); border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--primary); }
+
+    .tuner-container { background: rgba(0,0,0,0.3); border-radius: 16px; padding: 12px; text-align: center; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05); }
+    .note-strip { display: flex; justify-content: center; align-items: center; gap: 15px; height: 45px; }
+    .note-side { font-size: 1rem; opacity: 0.3; }
+    .note-main { font-size: 2.5rem; font-weight: 800; color: var(--primary); min-width: 70px; }
+
+    .tuner-rail { height: 8px; background: #334155; border-radius: 4px; position: relative; margin: 8px 0; overflow: hidden; }
+    #tuner-needle { position: absolute; left: 50%; width: 4px; height: 100%; background: var(--success); transition: transform 0.1s; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    button { padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+    
+    .btn-start { background: var(--success); color: white; }
+    .btn-stop { background: var(--accent); color: white; }
+    .btn-clear-all { background: #475569; color: white; grid-column: span 2; font-size: 0.75rem; padding: 8px; margin-top: 5px; }
+
+    .memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+    .mem-btn { 
+      background: var(--input-bg); color: white; border: 2px solid transparent; 
+      padding: 10px 2px; border-radius: 10px; font-size: 0.6rem; height: 55px;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      transition: all 0.2s;
+    }
+    .mem-btn.occupied { border-color: var(--primary); background: rgba(0, 212, 255, 0.1); }
+    .mem-btn span { font-size: 0.5rem; opacity: 0.6; margin-top: 2px; }
+
+    .mixer-panel { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; border: 1px solid #475569; }
+    input, select { background: var(--input-bg); border: 1px solid #475569; color: white; padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; }
+    .label { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; display: block; margin-top: 8px; }
+    
+    .footer { margin-top: 20px; text-align: center; font-size: 0.65rem; color: #475569; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="app-header">
+    <h1 class="app-title"> Pitch– Trainer V2</h1>
+    <div class="app-subtitle"> Stefan Loeseke</div>
+  </div>
+
+  <canvas id="oscilloscope"></canvas>
+
+  <div class="tuner-container">
+    <div class="note-strip">
+      <span id="note-left" class="note-side">--</span>
+      <span id="note-center" class="note-main">--<sub id="oct-center" style="font-size: 0.8rem;"></sub></span>
+      <span id="note-right" class="note-side">--</span>
+    </div>
+    <div class="tuner-rail"><div id="tuner-needle"></div></div>
+    <div id="freq-val" style="font-family: monospace; color: var(--primary);">0.00 Hz</div>
+  </div>
+
+  <div class="grid">
+    <button id="start-btn" class="btn-start" onclick="startMic()">Mikro Start</button>
+    <button id="stop-btn" class="btn-stop" onclick="stopMic()" disabled>Stop</button>
+  </div>
+
+  <div class="memory-grid" id="memory-container"></div>
+  <div class="grid" style="margin-bottom: 15px;">
+    <button class="btn-clear-all" onclick="clearAllSlots()">Alle Slots leeren</button>
+  </div>
+
+  <div class="mixer-panel">
+    <div class="grid">
+      <div>
+        <span class="label">Note / Hz</span>
+        <input type="text" id="gen-note" placeholder="z.B. A4">
+      </div>
+      <div>
+        <span class="label">Frequenz</span>
+        <input type="number" id="gen-freq" value="440">
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <span class="label">Wellenform</span>
+        <select id="wave-type">
+          <option value="sine">Sinus</option>
+          <option value="square">Rechteck</option>
+          <option value="sawtooth">Sägezahn</option>
+          <option value="triangle">Dreieck</option>
+        </select>
+      </div>
+      <div>
+        <span class="label">Dauer: <span id="dur-label">1.5</span>s</span>
+        <input type="range" id="duration" min="0.1" max="5.0" step="0.1" value="1.5" oninput="document.getElementById('dur-label').innerText = this.value">
+      </div>
+    </div>
+    <button style="width:100%; background: var(--text); color: black;" onclick="playTone(document.getElementById('gen-freq').value)">Referenzton abspielen</button>
+  </div>
+</div>
+
+<div class="footer">
+  Developed by <b>[Stefan Löseke flyloetrump-loboratory]</b> | Version 1.2.0 | © 2026
+</div>
+
+<script>
+  let audioCtx, analyser, source, animationId, isRunning = false;
+  let currentFreq = 0, currentNoteStr = "--";
+  let memory = new Array(8).fill(null);
+  const noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+
+  const canvas = document.getElementById('oscilloscope');
+  const canvasCtx = canvas.getContext('2d');
+
+  function updateMemoryUI() {
+    const container = document.getElementById('memory-container');
+    container.innerHTML = '';
+    memory.forEach((val, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'mem-btn' + (val ? ' occupied' : '');
+      
+      if(val) {
+        btn.innerHTML = `<b>${val.note}</b><span>${Math.round(val.freq)} Hz</span>`;
+        // Einfachklick: Abspielen
+        btn.onclick = () => playTone(val.freq);
+        // Doppelklick: Überschreiben oder Löschen
+        btn.ondblclick = () => handleSlotDblClick(i);
+      } else {
+        btn.innerHTML = `Slot ${i+1}<span>leer</span>`;
+        btn.onclick = () => saveToSlot(i);
+      }
+      container.appendChild(btn);
+    });
+  }
+
+  function handleSlotDblClick(index) {
+    if (isRunning && currentFreq > 20) {
+      // Wenn Mikro läuft: Überschreiben
+      saveToSlot(index);
+    } else if (!isRunning) {
+      // Wenn Mikro aus: Slot leeren
+      memory[index] = null;
+      updateMemoryUI();
+    }
+  }
+
+  function saveToSlot(index) {
+    if (currentFreq > 20) {
+      memory[index] = { freq: currentFreq, note: currentNoteStr };
+      updateMemoryUI();
+    }
+  }
+
+  function clearAllSlots() {
+    if(confirm("Wirklich alle Slots leeren?")) {
+      memory.fill(null);
+      updateMemoryUI();
+    }
+  }
+
+  updateMemoryUI();
+
+  // Frequenz-Logik für manuelle Eingabe
+  document.getElementById('gen-note').oninput = function() {
+    const val = this.value.trim().toUpperCase();
+    const match = val.match(/^([A-G][#♯B♭]?)(-?\d)$/);
+    if (match) {
+      let name = match[1].replace('♯', '#').replace('♭', 'B');
+      const octave = parseInt(match[2]);
+      const noteIdx = noteNames.indexOf(name.replace('#', '♯'));
+      if (noteIdx !== -1) {
+        const freq = 440 * Math.pow(2, (noteIdx + (octave + 1) * 12 - 69) / 12);
+        document.getElementById('gen-freq').value = freq.toFixed(2);
+      }
+    }
+  };
+
+  async function startMic() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = false;
+    isRunning = true;
+    loop();
+  }
+
+  function stopMic() {
+    cancelAnimationFrame(animationId);
+    if (source) source.disconnect();
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
+    isRunning = false;
+  }
+
+  function loop() {
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Float32Array(bufferLength);
+    analyser.getFloatTimeDomainData(dataArray);
+
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+    let rms = Math.sqrt(sum / dataArray.length);
+
+    if (rms > 0.01) {
+      canvasCtx.fillStyle = 'rgba(15, 23, 42, 1)';
+      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+      canvasCtx.lineWidth = 2;
+      canvasCtx.strokeStyle = '#00d4ff';
+      canvasCtx.beginPath();
+      let sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        let v = dataArray[i] * 180 + (canvas.height / 2);
+        if (i === 0) canvasCtx.moveTo(x, v); else canvasCtx.lineTo(x, v);
+        x += sliceWidth;
+      }
+      canvasCtx.stroke();
+
+      const freq = autoCorrelate(dataArray, audioCtx.sampleRate);
+      if (freq !== -1 && freq > 20) {
+        currentFreq = freq;
+        const h = 12 * Math.log2(freq / 440) + 69;
+        const noteIndex = Math.round(h);
+        const cents = Math.floor(100 * (h - noteIndex));
+        currentNoteStr = noteNames[((noteIndex % 12) + 12) % 12] + (Math.floor(noteIndex/12)-1);
+        
+        document.getElementById('note-center').firstChild.textContent = currentNoteStr.replace(/\d+/, "");
+        document.getElementById('oct-center').textContent = Math.floor(noteIndex/12)-1;
+        document.getElementById('note-left').textContent = noteNames[(((noteIndex-1) % 12) + 12) % 12];
+        document.getElementById('note-right').textContent = noteNames[(((noteIndex+1) % 12) + 12) % 12];
+        document.getElementById('freq-val').textContent = freq.toFixed(2) + " Hz";
+        document.getElementById('tuner-needle').style.transform = `translateX(${cents * 2}px)`;
+        document.getElementById('tuner-needle').style.background = Math.abs(cents) < 5 ? 'var(--success)' : 'var(--accent)';
+      }
+    }
+    animationId = requestAnimationFrame(loop);
+  }
+
+  function autoCorrelate(buf, sampleRate) {
+    let c = new Float32Array(buf.length).fill(0);
+    for (let i=0; i<buf.length; i++)
+      for (let j=0; j<buf.length-i; j++) c[i] = c[i] + buf[j]*buf[j+i];
+    let d = 0; while (c[d] > c[d+1]) d++;
+    let maxval = -1, maxpos = -1;
+    for (let i=d; i<buf.length; i++) { if (c[i] > maxval) { maxval = c[i]; maxpos = i; } }
+    return sampleRate / maxpos;
+  }
+
+  function playTone(f) {
+    const freq = parseFloat(f);
+    const dur = parseFloat(document.getElementById('duration').value);
+    const type = document.getElementById('wave-type').value;
+    if (!freq || freq < 20) return;
+    
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  }
+</script>
+</body>
+</html>
